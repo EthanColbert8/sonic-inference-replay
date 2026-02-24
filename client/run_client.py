@@ -2,6 +2,7 @@ import numpy as np
 import tritonclient.grpc as grpcclient
 
 batch_size = 10
+#incorrect_delta = 11111.1
 
 with grpcclient.InferenceServerClient("localhost:8001") as client:
     inputs = [

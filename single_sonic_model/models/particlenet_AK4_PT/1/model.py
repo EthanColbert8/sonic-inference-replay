@@ -19,6 +19,9 @@ class TritonPythonModel:
         self.output_dtype = pb_utils.triton_string_to_numpy(output_config["data_type"])
 
     def execute(self, requests):
+        # debug print
+        print("Reached execute method")
+
         responses = []
 
         with torch.no_grad():
@@ -59,6 +62,8 @@ class TritonPythonModel:
                         "message": err_msg,
                         "inputs": request_inputs
                     }
+
+                    print("Hit error. Dumping replay file.")
                     with open(f"{self.replay_dump_dir}/{req_id}.pkl", "wb") as f:
                         pickle.dump(err_dict, f)
                 

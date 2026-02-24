@@ -1,9 +1,10 @@
 #!/bin/bash
 
-MODEL_FOLDER="/work/users/colberte/sonic_hackathon_feb26/sonic-inference-replay/single_sonic_model/models"
-DUMP_FOLDER="/work/users/colberte/sonic_hackathon_feb26/sonic-inference-replay/replay_dumps"
-TRITON_CONTAINER="/depot/cms/users/colberte/SONIC/triton_25.07.sif"
+# CHANGE MODEL AND DUMP FOLDERS to your own.
+MODEL_FOLDER="/depot/cms/users/colberte/SONIC/sonic-inference-replay/single_sonic_model/models"
+DUMP_FOLDER="/depot/cms/users/colberte/SONIC/sonic-inference-replay/replay_dumps"
 
+TRITON_CONTAINER="/depot/cms/users/colberte/SONIC/triton_25.07.sif"
 MY_PACKAGES="/depot/cms/private/users/colberte/conda_envs/torchonnxCUDA/lib/python3.12/site-packages"
 CONTAINER_PACKAGES="/usr/local/lib/python3.12/dist-packages"
 

@@ -1,3 +1,6 @@
+# Binary dumps
+replay_dumps/
+
 # dev-env specific files
 .vscode/
 

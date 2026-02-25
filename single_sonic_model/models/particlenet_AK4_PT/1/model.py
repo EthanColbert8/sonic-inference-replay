@@ -1,14 +1,19 @@
+from enum import Enum
 import json
 import numpy as np
 import pickle
 import torch
 import triton_python_backend_utils as pb_utils
 
+class InputDumpSetting(Enum):
+    NEVER = 0
+    ALWAYS = 1
+    ON_FAILURE = 2
+
 class TritonPythonModel:
     def initialize(self, args):
         # Location to dump replay data on failed requests
         self.replay_dump_dir = "/dumps"
-        self.always_dump_inputs = True # Flip this to only dump inputs on failure
         self.device = torch.device("cuda:0")
 
         self.model = torch.jit.load("/models/particlenet_AK4_PT/1/model.pt", map_location=self.device).to(self.device)
@@ -19,13 +24,20 @@ class TritonPythonModel:
 
         self.output_dtype = pb_utils.triton_string_to_numpy(output_config["data_type"])
 
+        # Configure input dumping based on custom model config parameter
+        self.input_dump_setting = InputDumpSetting.NEVER
+        config_dump_string = model_config.get("parameters", {}).get("dump_input", {}).get("string_value", "").lower()
+        if (config_dump_string == "always"):
+            self.input_dump_setting = InputDumpSetting.ALWAYS
+        elif (config_dump_string == "on_failure"):
+            self.input_dump_setting = InputDumpSetting.ON_FAILURE
+
     def execute(self, requests):
         responses = []
 
         with torch.no_grad():
             for request in requests:
                 err_msg = "none"
-                dump_inputs = self.always_dump_inputs
 
                 request_inputs = {
                     "pf_points__0": pb_utils.get_input_tensor_by_name(request, "pf_points__0").as_numpy(),
@@ -55,9 +67,9 @@ class TritonPythonModel:
                 except Exception as ex:
                     err_msg = f"Error during inference: {str(ex)}"
                     response = pb_utils.InferenceResponse(error=pb_utils.TritonError(err_msg))
-                    dump_inputs = True
 
-                if dump_inputs:
+                # Dump inputs if configured to
+                if (self.input_dump_setting == InputDumpSetting.ALWAYS) or (self.input_dump_setting == InputDumpSetting.ON_FAILURE and err_msg != "none"):
                     req_id = request.request_id() # Returns a client-specified id or empty string
                     if (req_id == ""):
                         req_id = "UNKNOWN_ID"

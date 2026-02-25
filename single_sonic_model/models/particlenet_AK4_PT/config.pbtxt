@@ -44,3 +44,7 @@ output [
     label_filename: "particlenet_labels.txt"
   }
 ]
+parameters {
+  key: "dump_input"
+  value: { string_value: "always" }
+}

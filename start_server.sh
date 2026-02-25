@@ -14,3 +14,7 @@ apptainer run --nv -B "${MODEL_FOLDER}:/models" -B "${DUMP_FOLDER}:/dumps" \
     -B "${MY_PACKAGES}/torch-2.6.0+cu126.dist-info:${CONTAINER_PACKAGES}/torch-2.6.0+cu126.dist-info" \
     -B "${MY_PACKAGES}/torchgen:${CONTAINER_PACKAGES}/torchgen" \
     $TRITON_CONTAINER tritonserver --model-repository=/models
+    # --trace-config triton,file=/dumps/trace2.json \
+    # --trace-config triton,log-frequency=1 \
+    # --trace-config rate=1 \
+    # --trace-config level=TENSORS

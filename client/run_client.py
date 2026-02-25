@@ -30,7 +30,7 @@ with grpcclient.InferenceServerClient("localhost:8001") as client:
     inputs[4].set_data_from_numpy(sv_features)
     inputs[5].set_data_from_numpy(sv_mask)
 
-    result = client.infer("particlenet_AK4_PT", inputs, outputs=outputs)
+    result = client.infer("particlenet_AK4_PT", inputs, outputs=outputs, request_id="test_reqid_3")
 
     output_data = result.as_numpy("softmax__0")
 

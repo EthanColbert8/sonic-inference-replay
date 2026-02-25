@@ -1,8 +1,9 @@
 # Binary dumps
 replay_dumps/
 
-# dev-env specific files
+# development environment / scratch work
 .vscode/
+*.ipynb
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

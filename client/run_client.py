@@ -1,8 +1,8 @@
+import uuid
 import numpy as np
 import tritonclient.grpc as grpcclient
 
 batch_size = 10
-#incorrect_delta = 11111.1
 
 with grpcclient.InferenceServerClient("localhost:8001") as client:
     inputs = [
@@ -30,7 +30,8 @@ with grpcclient.InferenceServerClient("localhost:8001") as client:
     inputs[4].set_data_from_numpy(sv_features)
     inputs[5].set_data_from_numpy(sv_mask)
 
-    result = client.infer("particlenet_AK4_PT", inputs, outputs=outputs, request_id="test_reqid_3")
+    req_id = str(uuid.uuid4())
+    result = client.infer("particlenet_AK4_PT", inputs, outputs=outputs, request_id=req_id)
 
     output_data = result.as_numpy("softmax__0")
 

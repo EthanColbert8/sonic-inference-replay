@@ -1,5 +1,5 @@
 name: "particlenet_AK4_PT"
-platform: "pytorch_libtorch"
+backend: "python"
 max_batch_size : 5000
 dynamic_batching {
    preferred_batch_size: [ 200 ]
@@ -44,3 +44,7 @@ output [
     label_filename: "particlenet_labels.txt"
   }
 ]
+parameters {
+  key: "dump_input"
+  value: { string_value: "on_failure" }
+}

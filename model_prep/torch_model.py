@@ -24,9 +24,13 @@ class TritonPythonModel:
         model_config = json.loads(args["model_config"])
         self.model_name = model_config["name"]
         
-        # TODO: sort names based on "__#" suffix
         self.input_names = [i["name"] for i in model_config["input"]]
         self.output_names = [i["name"] for i in model_config["output"]]
+
+        # Triton's Torch backend requires a "__<number>" suffix on tensor names to indicate
+        # model's expected ordering of input and output. Use this to infer ordering.
+        self.input_names.sort(key=lambda name: int(name.split("__")[-1]))
+        self.output_names.sort(key=lambda name: int(name.split("__")[-1]))
 
         self.output_dtypes = []
         for out_name in self.output_names:

@@ -5,6 +5,15 @@ import tritonclient.grpc as grpcclient
 batch_size = 10
 
 with grpcclient.InferenceServerClient("localhost:8001") as client:
+    # model_config = client.get_model_config("particlenet_AK4_PT")
+    # print(f"Config type: {type(model_config)}")
+    # print(model_config)
+    
+    # print("Model inputs:")
+    # print([inp.name for inp in model_config.config.input])
+    # print("\nModel outputs:")
+    # print([out.name for out in model_config.config.output])
+
     inputs = [
         grpcclient.InferInput("pf_points__0", [batch_size, 2, 100], "FP32"),
         grpcclient.InferInput("pf_features__1", [batch_size, 20, 100], "FP32"),

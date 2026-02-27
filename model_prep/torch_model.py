@@ -13,7 +13,7 @@ class InputDumpSetting(Enum):
 
 class TritonPythonModel:
     def initialize(self, args):
-        # Location to dump replay data on failed requests
+        # Location to dump replay data as configured
         self.replay_dump_dir = "/dumps"
         self.device = torch.device("cuda:0")
 
@@ -24,6 +24,7 @@ class TritonPythonModel:
         model_config = json.loads(args["model_config"])
         self.model_name = model_config["name"]
         
+        # TODO: sort names based on "__#" suffix
         self.input_names = [i["name"] for i in model_config["input"]]
         self.output_names = [i["name"] for i in model_config["output"]]
 

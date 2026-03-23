@@ -1,10 +1,13 @@
 import os
 import cmd
-import pickle
+import ast
+import shlex
 import uuid
 import traceback
+import pickle
 import numpy as np
 from tritonclient import grpc as grpcclient
+from tritonclient import utils as tcutils
 
 class TritonReplayREPL(cmd.Cmd):
     """REPL for replaying Triton inference requests from pickled dumps."""
@@ -15,22 +18,11 @@ class TritonReplayREPL(cmd.Cmd):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.dump_dir = os.path.join(os.path.dirname(__file__), "..", "replay_dumps")
+        self.last_request_id = None
+        self.rng = np.random.default_rng()
+
         self.client = None
         self._connect_client()
-    
-    def do_set_dump_dir(self, arg):
-        """Set the dumps directory. Usage: set_dump_dir <path>"""
-        if not arg:
-            print("Usage: set_dump_dir <path>")
-            return
-        
-        arg = arg.strip()
-        if not os.path.isdir(arg):
-            print(f"✗ Directory does not exist: {arg}")
-            return
-        
-        self.dump_dir = arg
-        print(f"✓ Dumps directory set to: {self.dump_dir}")
     
     def do_replay(self, arg):
         """Replay an inference request from a pickled dump. Usage: replay <filename>"""
@@ -51,7 +43,6 @@ class TritonReplayREPL(cmd.Cmd):
         
         if not os.path.isfile(filepath):
             print(f"✗ File not found: {filepath}")
-            print(f"  Looked in: {self.dump_dir}")
             return
         
         try:
@@ -62,12 +53,132 @@ class TritonReplayREPL(cmd.Cmd):
             print(f"✓ Loaded dump from: {filepath}")
             
             # Send inference request
-            self._send_inference(data["inputs"], data["model"])
+            self.last_request_id = self._send_inference(data["inputs"], data["model"])
             
         except Exception as e:
             print(f"✗ Error loading or replaying dump: {e}")
             traceback.print_exc()
     
+    def do_request_random(self, arg):
+        """Send random inference input. Usage: request_random <model_name> <input_name> <shape> [<input_name> <shape> ...]"""
+        if self.client is None:
+            print("✗ Not connected to Triton server. Cannot send request.")
+            return
+
+        try:
+            model_name, input_shapes = self._parse_random_request_args(arg)
+        except ValueError as e:
+            print(f"✗ Invalid input: {e}")
+            return
+
+        try:
+            model_config = self.client.get_model_config(model_name)
+            model_inputs = model_config.config.input
+            model_input_names = [inp.name for inp in model_inputs]
+
+            provided_names = set(input_shapes.keys())
+            expected_names = set(model_input_names)
+            missing = sorted(expected_names - provided_names)
+            unexpected = sorted(provided_names - expected_names)
+
+            if missing:
+                print(f"✗ Missing shapes for model inputs: {', '.join(missing)}")
+                return
+            if unexpected:
+                print(f"✗ Unexpected inputs for model '{model_name}': {', '.join(unexpected)}")
+                return
+
+            random_inputs = {}
+
+            for inp in model_inputs:
+                triton_dtype = str(inp.data_type)
+                if triton_dtype.startswith("TYPE_"):
+                    triton_dtype = triton_dtype[5:]
+
+                try:
+                    np_dtype = tcutils.triton_to_np_dtype(triton_dtype)
+                except Exception:
+                    np_dtype = np.float32
+
+                shape = input_shapes[inp.name]
+                if np.issubdtype(np_dtype, np.floating):
+                    values = self.rng.random(shape, dtype=np.float32).astype(np_dtype, copy=False)
+                elif np.issubdtype(np_dtype, np.integer):
+                    values = self.rng.integers(0, 10, size=shape, dtype=np_dtype)
+                elif np.issubdtype(np_dtype, np.bool_):
+                    values = self.rng.integers(0, 2, size=shape, dtype=np.int8).astype(np.bool_)
+                else:
+                    values = self.rng.random(shape, dtype=np.float32)
+
+                random_inputs[inp.name] = values
+
+            self.last_request_id = self._send_inference(random_inputs, model_name)
+
+        except Exception as e:
+            print(f"✗ Error creating or sending random request: {e}")
+            traceback.print_exc()
+
+    def _parse_random_request_args(self, arg):
+        """Parse request_random args into model name and {input_name: shape_tuple}."""
+        if not arg or not arg.strip():
+            raise ValueError(
+                "Usage: request_random <model_name> <input_name> <shape> [<input_name> <shape> ...]"
+            )
+
+        tokens = shlex.split(arg)
+        if len(tokens) < 3:
+            raise ValueError(
+                "Usage: request_random <model_name> <input_name> <shape> [<input_name> <shape> ...]"
+            )
+        if (len(tokens) - 1) % 2 != 0:
+            raise ValueError(
+                "Input arguments must be provided as <input_name> <shape> pairs."
+            )
+
+        model_name = tokens[0]
+        input_shapes = {}
+
+        for i in range(1, len(tokens), 2):
+            input_name = tokens[i]
+            shape_str = tokens[i + 1]
+
+            try:
+                parsed_shape = ast.literal_eval(shape_str)
+            except Exception as e:
+                raise ValueError(f"Invalid shape for input '{input_name}': {shape_str}") from e
+
+            if isinstance(parsed_shape, int):
+                shape = (parsed_shape,)
+            elif isinstance(parsed_shape, (tuple, list)):
+                shape = tuple(parsed_shape)
+            else:
+                raise ValueError(
+                    f"Shape for input '{input_name}' must be an int, tuple, or list."
+                )
+
+            if any((not isinstance(dim, int)) or dim < 0 for dim in shape):
+                raise ValueError(
+                    f"Shape for input '{input_name}' must contain only non-negative integers."
+                )
+
+            input_shapes[input_name] = shape
+
+        return model_name, input_shapes
+
+    def do_set_dump_dir(self, arg):
+        """Set the dumps directory. Usage: set_dump_dir <path>"""
+        if not arg:
+            print("Usage: set_dump_dir <path>")
+            return
+        
+        arg = arg.strip()
+        if not os.path.isdir(arg):
+            print(f"✗ Directory does not exist: {arg}")
+            return
+        
+        self.dump_dir = arg
+        print(f"✓ Dumps directory set to: {self.dump_dir}")
+
     def do_list_dumps(self, arg):
         """List available dump files in the current dumps directory."""
         if not os.path.isdir(self.dump_dir):
@@ -86,6 +197,13 @@ class TritonReplayREPL(cmd.Cmd):
             size = os.path.getsize(filepath)
             print(f"  {f} ({size} bytes)")
     
+    def do_last_request(self, arg):
+        """Show the last request ID sent to Triton."""
+        if self.last_request_id:
+            print(f"Last request ID: {self.last_request_id}")
+        else:
+            print("No requests have been sent yet.")
+    
     def do_status(self, arg):
         """Show current status and configuration."""
         print("Current Configuration:")
@@ -99,6 +217,11 @@ class TritonReplayREPL(cmd.Cmd):
                 print(f"  Triton server: Connected but {e}")
         else:
             print(f"  Triton server: Not connected")
+        
+        if self.last_request_id:
+            print(f"  Last request ID: {self.last_request_id}")
+        else:
+            print("  No requests have been sent yet.")
     
     def do_reconnect(self, arg):
         """Reconnect to the Triton server."""
@@ -147,13 +270,13 @@ class TritonReplayREPL(cmd.Cmd):
         inputs = []
         for name in input_names:
             tensor_data = data[name]
-            triton_dtype = self._get_triton_dtype(tensor_data.dtype)
+            triton_dtype = tcutils.np_to_triton_dtype(tensor_data.dtype)
             inputs.append(grpcclient.InferInput(name, tensor_data.shape, triton_dtype))
             inputs[-1].set_data_from_numpy(tensor_data)
 
         outputs = [grpcclient.InferRequestedOutput(name) for name in output_names]
         
-        if req_id is None:
+        if (req_id is None):
             req_id = str(uuid.uuid4())
         
         print(f"✓ Sending inference request with id: {req_id}")
@@ -167,38 +290,14 @@ class TritonReplayREPL(cmd.Cmd):
         except Exception as e:
             print(f"✗ Inference failed for request id: {req_id} with error: {e}")
             traceback.print_exc()
+        
+        return req_id
 
     def _get_model_io(self, model_config):
         """Extract input and output names and dtypes from model config."""
         input_names = [inp.name for inp in model_config.config.input]
         output_names = [out.name for out in model_config.config.output]
         return input_names, output_names
-
-    def _get_triton_dtype(self, numpy_dtype):
-        """Convert numpy dtype to Triton dtype string."""
-        dtype_map = {
-            np.float32: "FP32",
-            np.float64: "FP64",
-            np.int32: "INT32",
-            np.int64: "INT64",
-            np.uint32: "UINT32",
-            np.uint64: "UINT64",
-            np.int8: "INT8",
-            np.uint8: "UINT8",
-        }
-        
-        # Convert numpy dtype to numpy type
-        if hasattr(numpy_dtype, 'type'):
-            numpy_type = numpy_dtype.type
-        else:
-            numpy_type = numpy_dtype
-        
-        for np_type, triton_type in dtype_map.items():
-            if numpy_type == np_type:
-                return triton_type
-        
-        # Default to FP32
-        return "FP32"
 
 if (__name__ == "__main__"):
     repl = TritonReplayREPL()

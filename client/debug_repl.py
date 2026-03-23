@@ -89,9 +89,8 @@ class TritonReplayREPL(cmd.Cmd):
                 return
 
             random_inputs = {}
-
             for inp in model_inputs:
-                triton_dtype = str(inp.data_type)
+                triton_dtype = grpcclient.model_config_pb2.DataType.Name(inp.data_type)
                 if triton_dtype.startswith("TYPE_"):
                     triton_dtype = triton_dtype[5:]
 
@@ -118,52 +117,24 @@ class TritonReplayREPL(cmd.Cmd):
             print(f"✗ Error creating or sending random request: {e}")
             traceback.print_exc()
 
-    def _parse_random_request_args(self, arg):
-        """Parse request_random args into model name and {input_name: shape_tuple}."""
-        if not arg or not arg.strip():
-            raise ValueError(
-                "Usage: request_random <model_name> <input_name> <shape> [<input_name> <shape> ...]"
-            )
-
-        tokens = shlex.split(arg)
-        if len(tokens) < 3:
-            raise ValueError(
-                "Usage: request_random <model_name> <input_name> <shape> [<input_name> <shape> ...]"
-            )
-        if (len(tokens) - 1) % 2 != 0:
-            raise ValueError(
-                "Input arguments must be provided as <input_name> <shape> pairs."
-            )
-
-        model_name = tokens[0]
-        input_shapes = {}
-
-        for i in range(1, len(tokens), 2):
-            input_name = tokens[i]
-            shape_str = tokens[i + 1]
-
-            try:
-                parsed_shape = ast.literal_eval(shape_str)
-            except Exception as e:
-                raise ValueError(f"Invalid shape for input '{input_name}': {shape_str}") from e
-
-            if isinstance(parsed_shape, int):
-                shape = (parsed_shape,)
-            elif isinstance(parsed_shape, (tuple, list)):
-                shape = tuple(parsed_shape)
-            else:
-                raise ValueError(
-                    f"Shape for input '{input_name}' must be an int, tuple, or list."
-                )
-
-            if any((not isinstance(dim, int)) or dim < 0 for dim in shape):
-                raise ValueError(
-                    f"Shape for input '{input_name}' must contain only non-negative integers."
-                )
-
-            input_shapes[input_name] = shape
-
-        return model_name, input_shapes
+    def do_get_model_info(self, arg):
+        """Get model input/output information. Usage: get_model_info <model_name>"""
+        if self.client is None:
+            print("✗ Not connected to Triton server. Cannot get model info.")
+            return
+        
+        model_name = arg.strip()
+        if not model_name:
+            print("Usage: get_model_info <model_name>")
+            return
+        
+        try:
+            model_config = self.client.get_model_config(model_name)
+            print(f"Model '{model_name}' configuration:")
+            print(model_config)
+        except Exception as e:
+            print(f"✗ Error retrieving model info for '{model_name}': {e}")
+            traceback.print_exc()
 
     def do_set_dump_dir(self, arg):
         """Set the dumps directory. Usage: set_dump_dir <path>"""
@@ -298,6 +269,53 @@ class TritonReplayREPL(cmd.Cmd):
         input_names = [inp.name for inp in model_config.config.input]
         output_names = [out.name for out in model_config.config.output]
         return input_names, output_names
+    
+    def _parse_random_request_args(self, arg):
+        """Parse request_random args into model name and {input_name: shape_tuple}."""
+        if not arg or not arg.strip():
+            raise ValueError(
+                "Usage: request_random <model_name> <input_name> <shape> [<input_name> <shape> ...]"
+            )
+
+        tokens = shlex.split(arg)
+        if len(tokens) < 3:
+            raise ValueError(
+                "Usage: request_random <model_name> <input_name> <shape> [<input_name> <shape> ...]"
+            )
+        if (len(tokens) - 1) % 2 != 0:
+            raise ValueError(
+                "Input arguments must be provided as <input_name> <shape> pairs."
+            )
+
+        model_name = tokens[0]
+        input_shapes = {}
+
+        for i in range(1, len(tokens), 2):
+            input_name = tokens[i]
+            shape_str = tokens[i + 1]
+
+            try:
+                parsed_shape = ast.literal_eval(shape_str)
+            except Exception as e:
+                raise ValueError(f"Invalid shape for input '{input_name}': {shape_str}") from e
+
+            if isinstance(parsed_shape, int):
+                shape = (parsed_shape,)
+            elif isinstance(parsed_shape, (tuple, list)):
+                shape = tuple(parsed_shape)
+            else:
+                raise ValueError(
+                    f"Shape for input '{input_name}' must be an int, tuple, or list."
+                )
+
+            if any((not isinstance(dim, int)) or dim < 0 for dim in shape):
+                raise ValueError(
+                    f"Shape for input '{input_name}' must contain only non-negative integers."
+                )
+
+            input_shapes[input_name] = shape
+
+        return model_name, input_shapes
 
 if (__name__ == "__main__"):
     repl = TritonReplayREPL()

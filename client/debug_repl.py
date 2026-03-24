@@ -147,8 +147,10 @@ class TritonReplayREPL(cmd.Cmd):
             if len(dump_inputs) == 0:
                 print("No input tensors found!")
             else:
+                print("Input information:")
                 for name, val in dump_inputs.items():
-                    print(f"Input {name}: shape: {val.shape}, NumPy dtype: {val.dtype}")
+                    print(f"  Input {name}: shape: {val.shape}, dtype: {val.dtype}")
+                print() # extra newline
         
         except Exception as e:
             print(f"✗ Error loading dump: {e}")
@@ -205,6 +207,24 @@ class TritonReplayREPL(cmd.Cmd):
             filepath = os.path.join(self.dump_dir, f)
             size = os.path.getsize(filepath)
             print(f"  {f} ({size} bytes)")
+
+    def do_get_models(self, arg):
+        """Print model repository index from the Triton server."""
+        if self.client is None:
+            print("✗ Not connected to Triton server. Cannot list models.")
+            return
+        
+        try:
+            models = self.client.get_model_repository_index()
+            if not models:
+                print("No models found on the Triton server.")
+                return
+
+            print(models)
+            
+        except Exception as e:
+            print(f"✗ Error printing models: {e}")
+            traceback.print_exc()
 
     def do_last_request(self, arg):
         """Show the last request ID sent to Triton."""

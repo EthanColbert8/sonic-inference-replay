@@ -10,6 +10,7 @@ The interactive commands are:
 - `request_random` (Usage explained below): Generate random inputs and send as an inference request. Usage is documented below (slightly more complicated as input shapes must be given).
 - `list_dumps`: List all dumps visible to the program.
 - `inspect_dump` (usage: `inspect_dump <filename_or_id>`): Print the request ID, model name, error message, and input shapes and dtypes from a dump of a previous request.
+- `get_models`: Print the model repository index from Triton server (all models Triton sees, and their state).
 - `get_model_info` (Usage: `get_model_info <model_name>`): Print the config Triton is currently using for the given model.
 - `last_request`: Get the ID of the last request sent to the model in this session.
 - `status`: Print the status of the REPL program (state of connection to Triton)
@@ -25,7 +26,7 @@ request_random <model_name> <input_name> <input_shape> [<input_name> <input_shap
 The input names and shapes must be paired, and all must be specified and match what the model expects.
 Shapes should be specified in Python's tuple syntax, enclosed in quotes.
 
-A concrete example for the `particlenet_AK4_PT` model is the following:
+A concrete example for the `particlenet_AK4_PT` model, with batch size 4, is the following:
 ```
 triton> request_random particlenet_AK4_PT pf_points__0 "(4, 2, 100)" pf_features__1 "(4, 20, 100)" pf_mask__2 "(4, 1, 100)" sv_points__3 "(4, 2, 10)" sv_features__4 "(4, 11, 10)" sv_mask__5 "(4, 1, 10)"
 ```

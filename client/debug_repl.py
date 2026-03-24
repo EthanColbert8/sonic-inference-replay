@@ -50,7 +50,7 @@ class TritonReplayREPL(cmd.Cmd):
             with open(filepath, 'rb') as f:
                 data = pickle.load(f)
             
-            print(f"✓ Loaded dump from: {filepath}")
+            print(f"✓ Loaded dump: {os.path.basename(filepath)}")
             
             # Send inference request
             self.last_request_id = self._send_inference(data["inputs"], data["model"])
@@ -117,6 +117,44 @@ class TritonReplayREPL(cmd.Cmd):
             print(f"✗ Error creating or sending random request: {e}")
             traceback.print_exc()
 
+    def do_inspect_dump(self, arg):
+        """Get information from an input dump. Usage: inspect_dump <filename>"""
+        if not arg:
+            print("Usage: inspect_dump <filename>")
+            return
+        
+        filename = arg.strip()
+        filepath = os.path.join(self.dump_dir, filename)
+
+        if not filepath.endswith('.pkl'):
+            filepath += '.pkl'
+        
+        if not os.path.isfile(filepath):
+            print(f"✗ File not found: {filepath}")
+            return
+        
+        try:
+            with open(filepath, 'rb') as f:
+                dump = pickle.load(f)
+            
+            print(f"✓ Loaded dump: {os.path.basename(filepath)}\n")
+
+            print(f"Request id: {dump.get('id', 'MISSING')}")
+            print(f"Model name: {dump.get('model', 'MISSING')}")
+            print(f"Error message: {dump.get('message', 'none')}")
+
+            dump_inputs = dump.get('inputs', {})
+            if len(dump_inputs) == 0:
+                print("No input tensors found!")
+            else:
+                for name, val in dump_inputs.items():
+                    print(f"Input {name}: shape: {val.shape}, NumPy dtype: {val.dtype}")
+        
+        except Exception as e:
+            print(f"✗ Error loading dump: {e}")
+            traceback.print_exc()
+            return
+
     def do_get_model_info(self, arg):
         """Get model input/output information. Usage: get_model_info <model_name>"""
         if self.client is None:
@@ -167,7 +205,7 @@ class TritonReplayREPL(cmd.Cmd):
             filepath = os.path.join(self.dump_dir, f)
             size = os.path.getsize(filepath)
             print(f"  {f} ({size} bytes)")
-    
+
     def do_last_request(self, arg):
         """Show the last request ID sent to Triton."""
         if self.last_request_id:
@@ -185,7 +223,7 @@ class TritonReplayREPL(cmd.Cmd):
                 server_ready = self.client.is_server_ready()
                 print(f"  Triton server: Connected (live={server_live}, ready={server_ready})")
             except Exception as e:
-                print(f"  Triton server: Connected but {e}")
+                print(f"  Triton server: Connection error: {e}")
         else:
             print(f"  Triton server: Not connected")
         

@@ -15,7 +15,7 @@ class TritonPythonModel:
     def initialize(self, args):
         # Location to dump replay data as configured
         self.replay_dump_dir = "/dumps"
-        self.device = torch.device("cuda:0")
+        self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
         model_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "model.pt")
         self.model = torch.jit.load(model_path, map_location=self.device).to(self.device)
